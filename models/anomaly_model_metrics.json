@@ -1,0 +1,8 @@
+{
+  "contamination_used": 0.2023,
+  "total_rows": 60000,
+  "true_attacks": 12139,
+  "flagged_anomalies": 12139,
+  "attacks_correctly_flagged": 10703,
+  "attack_recall_via_anomaly": 0.8817
+}
