@@ -141,11 +141,3 @@ the two training scripts. No other code changes needed.
 - **Explainable by default.** Every prediction carries a confidence score
   and an anomaly score, not just a bare label.
 
----
-
-## 📌 Next Steps (Week 3)
-
-1. React SOC dashboard — live event table, severity cards, copilot chat panel
-2. Dockerfile for backend + frontend, `docker-compose.yml`
-3. Deploy to Render/Railway, wire up environment variables securely
-4. Record a 2-minute demo (live detection + copilot chat)
