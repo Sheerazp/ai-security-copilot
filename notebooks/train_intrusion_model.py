@@ -53,7 +53,14 @@ def main():
     )
     print(f"  Train: {len(X_train):,}  |  Test: {len(X_test):,}")
 
-    print("\nTraining XGBoost classifier...")
+    print("\nTraining XGBoost classifier (class-weighted)...")
+    print("  Using balanced sample weights to improve minority-class")
+    print("  (Botnet, BruteForce) recall without sacrificing accuracy —")
+    print("  see notebooks/experiment_class_weighting.py for the controlled")
+    print("  comparison against an unweighted baseline.")
+    from sklearn.utils.class_weight import compute_sample_weight
+    sample_weights = compute_sample_weight(class_weight="balanced", y=y_train)
+
     model = XGBClassifier(
         n_estimators=200,
         max_depth=6,
@@ -64,7 +71,7 @@ def main():
         random_state=42,
         n_jobs=-1,
     )
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train, sample_weight=sample_weights)
 
     print("\nEvaluating on held-out test set...")
     y_pred = model.predict(X_test)

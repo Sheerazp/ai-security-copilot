@@ -1,0 +1,74 @@
+flowchart TB
+    subgraph DATA["📊 DATA SOURCE"]
+        A["Network Traffic / Security Logs<br/>(real-time events)"]
+    end
+
+    subgraph ML["🧠 AI / ML LAYER"]
+        direction LR
+        B["Intrusion Detection<br/>XGBoost Classifier<br/>(DDoS, PortScan, BruteForce, Botnet)"]
+        C["Anomaly Detection<br/>Isolation Forest<br/>(unsupervised, catches novel behavior)"]
+    end
+
+    D["🕸️ Threat Correlation Engine<br/>groups related events into attack campaigns"]
+
+    subgraph BACKEND["⚙️ FASTAPI BACKEND"]
+        direction LR
+        E["POST /detect"]
+        F["GET /events"]
+        G["GET /correlate"]
+        H["WS /ws/live"]
+    end
+
+    I[("🗄️ Database<br/>SQLite / PostgreSQL")]
+
+    subgraph AGENT["🤖 AGENTIC COPILOT — READ-ONLY"]
+        J["Claude LLM<br/>+ Function Calling"]
+        K["Tools:<br/>fetch_recent_events()<br/>get_severity_summary()<br/>correlate_events()"]
+    end
+
+    L["POST /copilot/ask"]
+
+    subgraph FRONTEND["🖥️ REACT SOC DASHBOARD"]
+        direction LR
+        M["Live Event Table"]
+        N["Stats Cards"]
+        O["Campaigns Panel"]
+        P["Copilot Chat UI"]
+    end
+
+    Q(["👤 Security Analyst"])
+
+    A --> B
+    A --> C
+    B --> E
+    C --> E
+    E --> I
+    I --> D
+    D --> G
+    I --> F
+    I --> H
+
+    L --> J
+    J -->|"calls tools"| K
+    K -->|"reads only"| I
+    J -->|"answer + recommended steps"| P
+
+    F --> M
+    H --> M
+    E -.->|"aggregates"| N
+    G --> O
+    P <--> L
+
+    M --> Q
+    N --> Q
+    O --> Q
+    P --> Q
+    Q -->|"asks question"| P
+    Q -->|"reviews & decides"| R["✅ Human Action<br/>(block / escalate / ignore)"]
+
+    style AGENT fill:#141b2e,stroke:#ff3d81,color:#fff
+    style ML fill:#141b2e,stroke:#00d9ff,color:#fff
+    style BACKEND fill:#0b0f19,stroke:#00d9ff,color:#fff
+    style FRONTEND fill:#0b0f19,stroke:#ff3d81,color:#fff
+    style R fill:#22c55e,stroke:#0b0f19,color:#0b0f19
+    style Q fill:#00d9ff,stroke:#0b0f19,color:#0b0f19

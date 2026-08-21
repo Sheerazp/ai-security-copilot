@@ -1,0 +1,28 @@
+{
+  "baseline": {
+    "accuracy": 0.9707,
+    "balanced_accuracy": 0.8578,
+    "macro_f1": 0.9087,
+    "macro_recall": 0.8578,
+    "per_class_recall": {
+      "BENIGN": 0.999,
+      "Botnet": 0.6646,
+      "BruteForce": 0.8079,
+      "DDoS": 0.8999,
+      "PortScan": 0.9176
+    }
+  },
+  "class_weighted": {
+    "accuracy": 0.9699,
+    "balanced_accuracy": 0.8675,
+    "macro_f1": 0.9085,
+    "macro_recall": 0.8675,
+    "per_class_recall": {
+      "BENIGN": 0.9963,
+      "Botnet": 0.7147,
+      "BruteForce": 0.8102,
+      "DDoS": 0.8999,
+      "PortScan": 0.9165
+    }
+  }
+}

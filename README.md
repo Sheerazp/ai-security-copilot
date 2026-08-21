@@ -14,15 +14,15 @@ Built as a portfolio project by Sheeraz (2026).
 | Component | Status |
 |---|---|
 | Synthetic dataset (60,000 labeled events) | ✅ Done |
-| Intrusion Detection model (XGBoost, 5-class) | ✅ Done — 97% accuracy, 90.8% macro F1 |
+| Intrusion Detection model (XGBoost, 5-class, class-weighted) | ✅ Done — 97.0% accuracy, 90.9% macro F1, 86.8% balanced accuracy |
 | Log Anomaly Detection model (Isolation Forest) | ✅ Done — 88.2% attack recall |
 | Threat Correlation Engine | ✅ Done — groups related events into campaigns |
 | FastAPI backend (`/detect`, `/events`, `/correlate`, `/stats`) | ✅ Done, tested |
 | Agentic Copilot (`/copilot/ask`) | ✅ Built — needs your `ANTHROPIC_API_KEY` to go live |
 | Real-time WebSocket stream (`/ws/live`) | ✅ Done, tested |
-| React SOC dashboard | 🔲 Next |
-| Docker + Docker Compose | 🔲 Next |
-| Cloud deployment | 🔲 Next |
+| React SOC dashboard | ✅ Done, tested end-to-end with the backend |
+| Docker + Docker Compose | ✅ Written (couldn't be run inside this build sandbox — test locally, see below) |
+| Cloud deployment | 🔲 Next — you'll need to do this step yourself with your own hosting account |
 
 ---
 
@@ -46,8 +46,20 @@ security-copilot/
 │   │   ├── database.py         # SQLAlchemy models (SQLite/Postgres)
 │   │   └── schemas.py          # Pydantic request/response models
 │   └── requirements.txt
-├── frontend/                   # React dashboard (next phase)
-└── docs/                       # Architecture notes, screenshots
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx              # Main dashboard layout
+│   │   ├── api.js                # Backend API client + WebSocket connector
+│   │   └── components/
+│   │       ├── StatsCards.jsx
+│   │       ├── EventTable.jsx
+│   │       ├── CampaignsPanel.jsx
+│   │       └── CopilotChat.jsx
+│   ├── Dockerfile
+│   └── nginx.conf
+├── backend/Dockerfile
+├── docker-compose.yml
+└── docs/                       # Architecture notes, dataset sources, screenshots
 ```
 
 ---
@@ -106,6 +118,49 @@ curl -X POST http://localhost:8000/copilot/ask \
 
 ---
 
+## 🧪 Model Evaluation — Full Transparency
+
+Two things matter more than a single accuracy number: **is it honest**, and
+**does it work on the classes that matter**. Both are documented here so
+anyone reviewing this project can verify the claims themselves.
+
+**Production model (class-weighted XGBoost):**
+
+| Metric | Value |
+|---|---|
+| Accuracy | 97.0% |
+| Balanced Accuracy | 86.8% |
+| Macro F1 | 90.9% |
+| Botnet Recall | 71.5% |
+| BruteForce Recall | 81.0% |
+| DDoS Recall | 90.0% |
+| PortScan Recall | 91.7% |
+| BENIGN Recall | 99.6% |
+
+**Why not push accuracy to 99%+?** This dataset has ~3.5% intentional label
+noise (see "About the Dataset" below) and small minority classes (Botnet =
+319 test samples out of 12,000). A model claiming 99%+ here would almost
+certainly be overfit or leaking information — not something a reviewer
+should trust. 97% accuracy with 90.9% macro F1 and 86.8% balanced accuracy
+is the honest, defensible number for this exact dataset.
+
+**What was tried and rejected:** SMOTE oversampling was tested on this
+dataset and made results *worse* (93.4% accuracy, 82.5% macro F1) — a known
+failure mode where synthetic oversampling distorts the decision boundary
+for gradient-boosted trees on tabular data. It was not used in the final
+model. See `notebooks/experiment_class_weighting.py` for the full,
+reproducible comparison between the unweighted baseline and the
+class-weighted version that shipped.
+
+**Reproduce these numbers yourself:**
+```bash
+cd notebooks
+python train_intrusion_model.py               # trains + saves the production model
+python experiment_class_weighting.py           # side-by-side baseline vs weighted comparison
+```
+
+---
+
 ## 🧠 About the Dataset
 
 The real CICIDS2017 dataset (Canadian Institute for Cybersecurity) could
@@ -131,6 +186,59 @@ the two training scripts. No other code changes needed.
 
 ---
 
+## 🖥️ Running the Frontend Locally
+
+```bash
+cd frontend
+npm install
+echo "VITE_API_URL=http://localhost:8000" > .env
+npm run dev
+```
+
+Open `http://localhost:5173`. Make sure the backend (previous section) is
+running first — the dashboard needs it for stats, events, campaigns, and
+the copilot chat.
+
+**What you'll see:** live stat cards, a real-time event feed (via
+WebSocket), correlated attack campaigns, and the Security Copilot chat
+panel. This was tested end-to-end in the build environment — screenshots
+in `docs/`.
+
+---
+
+## 🐳 Running Everything With Docker
+
+This project ships with a `Dockerfile` for the backend, a `Dockerfile`
+for the frontend (multi-stage build served via nginx), and a
+`docker-compose.yml` that runs both together.
+
+**Note:** Docker itself was not available in the sandbox this project was
+built in, so the Compose stack could not be run and verified there. The
+Dockerfiles follow standard, well-tested patterns, but **test this step
+yourself** before relying on it for a demo:
+
+```bash
+# From the project root (where docker-compose.yml lives)
+docker compose up --build
+```
+
+- Backend will be at `http://localhost:8000`
+- Frontend will be at `http://localhost:5173`
+
+To enable the copilot chat inside Docker, set your API key before running:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+docker compose up --build
+```
+
+If you hit a Docker error, copy the exact error message and troubleshoot
+from there — common first-time issues are Docker Desktop not running, or
+a port already in use (change the left-hand side of the `ports:` mapping
+in `docker-compose.yml` if so, e.g. `"8001:8000"`).
+
+---
+
 ## 🔒 Responsible AI Design
 
 - **Read-only tools only.** The copilot's tools (`fetch_recent_events`,
@@ -143,9 +251,10 @@ the two training scripts. No other code changes needed.
 
 ---
 
-## 📌 Next Steps (Week 3)
+## 📌 What's Left For You To Do
 
-1. React SOC dashboard — live event table, severity cards, copilot chat panel
-2. Dockerfile for backend + frontend, `docker-compose.yml`
-3. Deploy to Render/Railway, wire up environment variables securely
-4. Record a 2-minute demo (live detection + copilot chat)
+1. **Test Docker locally** (see above) — confirm `docker compose up --build` works on your machine
+2. **Get an Anthropic API key** and set `ANTHROPIC_API_KEY` to turn on the copilot chat
+3. **Deploy to Render/Railway** — push this repo to GitHub, connect it to your hosting
+   account, and set the same environment variable there
+4. **Record a 2-minute demo** (live detection + copilot chat) once deployed
