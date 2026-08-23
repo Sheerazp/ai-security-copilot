@@ -12,7 +12,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-MODEL_DIR = Path(__file__).resolve().parents[2] / "models"
+MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
 
 FEATURES_ORDER = [
     "duration", "src_bytes", "dst_bytes", "count", "srv_count",
