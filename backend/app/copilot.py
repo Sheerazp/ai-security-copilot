@@ -274,7 +274,7 @@ def ask_copilot(
         return {
             "answer": (
                 "The Security Copilot encountered an error: "
-                f"{type(exc).__name__}"
+                f"{type(exc).__name__}: {str(exc)}"
             ),
             "evidence_event_ids": list(dict.fromkeys(evidence_ids)),
             "tools_used": list(dict.fromkeys(tools_used)),
