@@ -1,11 +1,12 @@
-from google import genai
-from google.genai import types
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+
+from google import genai
+from google.genai import types
 
 from .database import SecurityEvent
 from . import correlation as corr
@@ -23,22 +24,21 @@ MODEL_NAME = "gemini-2.5-flash"
 
 
 SYSTEM_PROMPT = """
-You are a defensive Security Operations Copilot embedded in a SOC dashboard.
+You are a defensive Security Operations Copilot.
 
-Use ONLY evidence retrieved from the provided read-only security tools.
-
-Never invent events, IPs, counts, timestamps, severity, confidence,
-or campaign information.
+Use ONLY the security evidence provided by the backend.
 
 You are READ-ONLY:
-- Never block an IP.
-- Never ban an IP.
-- Never disable an account.
-- Never modify system state.
-- Never claim that you performed an action.
+- Do not block IPs.
+- Do not disable accounts.
+- Do not modify systems.
+- Never claim to have taken an action.
 
-Always finish with 1-3 concrete recommended next steps for the human analyst.
-Be concise, specific, and professional.
+Never invent events, IP addresses, counts, timestamps, severity,
+confidence values, or attack campaigns.
+
+Give concise, professional SOC analysis.
+Always finish with 1-3 recommended next steps for the human analyst.
 """
 
 
@@ -46,7 +46,7 @@ def _fetch_recent_events(
     db: Session,
     hours: int = 24,
     severity: str = "any",
-    limit: int = 20,
+    limit: int = 30,
 ) -> List[Dict[str, Any]]:
 
     hours = max(1, min(int(hours), 168))
@@ -91,7 +91,6 @@ def _get_severity_summary(
 ) -> Dict[str, Any]:
 
     hours = max(1, min(int(hours), 168))
-
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
     base = (
@@ -108,7 +107,7 @@ def _get_severity_summary(
         .all()
     )
 
-    by_label = dict(
+    by_attack_type = dict(
         base.with_entities(
             SecurityEvent.predicted_label,
             func.count(SecurityEvent.id),
@@ -121,7 +120,7 @@ def _get_severity_summary(
         "hours": hours,
         "total_events": base.count(),
         "by_severity": by_severity,
-        "by_attack_type": by_label,
+        "by_attack_type": by_attack_type,
     }
 
 
@@ -131,7 +130,6 @@ def _correlate_events(
 ) -> Dict[str, Any]:
 
     hours = max(1, min(int(hours), 168))
-
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
     rows = (
@@ -192,82 +190,76 @@ def ask_copilot(
     if _client is None or not os.environ.get("GEMINI_API_KEY"):
         return {
             "answer": (
-                "The Security Copilot is not configured yet. "
-                "Please configure GEMINI_API_KEY in Railway Variables."
+                "Gemini is not configured. "
+                "Please set GEMINI_API_KEY in Railway Variables."
             ),
             "evidence_event_ids": [],
             "tools_used": [],
         }
 
-    tools_used = []
-    evidence_ids = []
-
-    def fetch_recent_events(
-        hours: int = 24,
-        severity: str = "any",
-        limit: int = 20,
-    ):
-        tools_used.append("fetch_recent_events")
-
-        result = _fetch_recent_events(
-            db=db,
-            hours=hours,
-            severity=severity,
-            limit=limit,
-        )
-
-        evidence_ids.extend(
-            item["id"]
-            for item in result
-            if "id" in item
-        )
-
-        return {
-            "events": result,
-            "total_returned": len(result),
-        }
-
-    def get_severity_summary(hours: int = 24):
-        tools_used.append("get_severity_summary")
-
-        return _get_severity_summary(
-            db=db,
-            hours=hours,
-        )
-
-    def correlate_events(hours: int = 24):
-        tools_used.append("correlate_events")
-
-        return _correlate_events(
-            db=db,
-            hours=hours,
-        )
-
     try:
+        recent_events = _fetch_recent_events(
+            db=db,
+            hours=24,
+            severity="any",
+            limit=30,
+        )
+
+        severity_summary = _get_severity_summary(
+            db=db,
+            hours=24,
+        )
+
+        campaigns = _correlate_events(
+            db=db,
+            hours=24,
+        )
+
+        evidence_ids = [
+            event["id"]
+            for event in recent_events
+            if "id" in event
+        ]
+
+        prompt = f"""
+{SYSTEM_PROMPT}
+
+ANALYST QUESTION:
+{question}
+
+SECURITY EVIDENCE:
+
+SEVERITY SUMMARY:
+{severity_summary}
+
+RECENT EVENTS:
+{recent_events}
+
+CORRELATED CAMPAIGNS:
+{campaigns}
+
+Answer the analyst using ONLY this evidence.
+"""
+
         response = _client.models.generate_content(
             model=MODEL_NAME,
-            contents=question,
+            contents=prompt,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
                 temperature=0.2,
                 max_output_tokens=1000,
-                tools=[
-                    fetch_recent_events,
-                    get_severity_summary,
-                    correlate_events,
-                ],
-                automatic_function_calling=(
-                    types.AutomaticFunctionCallingConfig(
-                        maximum_remote_calls=5
-                    )
-                ),
             ),
         )
 
+        answer = response.text or "No response was generated."
+
         return {
-            "answer": response.text or "No answer generated.",
-            "evidence_event_ids": list(dict.fromkeys(evidence_ids)),
-            "tools_used": list(dict.fromkeys(tools_used)),
+            "answer": answer,
+            "evidence_event_ids": evidence_ids,
+            "tools_used": [
+                "fetch_recent_events",
+                "get_severity_summary",
+                "correlate_events",
+            ],
         }
 
     except Exception as exc:
@@ -276,6 +268,6 @@ def ask_copilot(
                 "The Security Copilot encountered an error: "
                 f"{type(exc).__name__}: {str(exc)}"
             ),
-            "evidence_event_ids": list(dict.fromkeys(evidence_ids)),
-            "tools_used": list(dict.fromkeys(tools_used)),
+            "evidence_event_ids": [],
+            "tools_used": [],
         }
