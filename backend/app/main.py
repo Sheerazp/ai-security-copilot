@@ -10,7 +10,7 @@ Endpoints:
     POST /detect          Score a single event (used by the simulator / real feed)
     GET  /events           Recent events, filterable by severity
     GET  /correlate        Run the correlation engine over recent events
-    POST /copilot/ask      Ask the agentic copilot a question
+    POST /copilot/ask      Ask the Security Copilot a question
     GET  /stats             Summary counts for the dashboard header
     WS   /ws/live           Live event stream (simulated) for the dashboard
 """
@@ -35,7 +35,7 @@ from .copilot import ask_copilot
 
 app = FastAPI(
     title="AI Security Operations Copilot",
-    description="Real-time threat detection + agentic analyst assistant. Read-only by design.",
+    description="Real-time threat detection + AI-assisted security analysis. Read-only by design.",
     version="0.1.0",
 )
 
@@ -238,3 +238,4 @@ async def websocket_live(websocket: WebSocket):
         pass
     finally:
         db.close()
+
